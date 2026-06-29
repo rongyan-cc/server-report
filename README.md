@@ -2,7 +2,7 @@
 
 每天自动把系统安全状况发送到你的邮箱。支持 SSH 登录审计、fail2ban 封禁统计、IP 归属地中文显示、子网自动封段等功能。
 
-详细说明: [https://rongyan.cc/code/server-report.html](https://rongyan.cc/code/server-report.html)
+详细说明: <a href="https://rongyan.cc/code/server-report.html" target="_blank">https://rongyan.cc/code/server-report.html</a>
 
 ---
 
