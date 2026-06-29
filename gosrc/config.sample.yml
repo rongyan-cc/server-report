@@ -1,0 +1,41 @@
+server:
+  name: "myserver"
+  ip: ""
+  ssh_port: 22
+
+smtp:
+  server: "smtp.example.com"
+  port: 465
+  ssl: true
+  user: "user@example.com"
+  password: "your-password"
+
+mail:
+  to: "admin@example.com"
+  from: "user@example.com"
+  subject: "服务器日报 - {name} / {ip} - {date}"
+
+schedule:
+  report_at: "00:01"
+
+modules:
+  system: true
+  ssh_auth: true
+  fail2ban: true
+  network: true
+  firewall: false
+  services: true
+  changes: true
+  security: true
+
+security:
+  fail2ban:
+    enabled: true
+    maxretry: 1
+    bantime: -1
+    findtime: 600
+    journalmatch: "_SYSTEMD_UNIT=ssh.service + _COMM=sshd"
+  subnet_ban:
+    enabled: true
+    threshold: 2
+    check_interval: 30
