@@ -4,7 +4,7 @@
 
 详细说明: <a href="https://rongyan.cc/code/server-report.html" target="_blank">https://rongyan.cc/code/server-report.html</a>
 
-—
+---
 
 ## 2026-06-30 更新说明
 
