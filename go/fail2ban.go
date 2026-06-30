@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -205,6 +206,7 @@ func getBanTime(ip string) string {
 
 func translateCountry(raw string) string {
 	rawLower := strings.ToLower(raw)
+	if strings.Contains(rawLower, "guatemala") { return "危地马拉/Guatemala" }
 	if strings.Contains(rawLower, "china") {
 		if strings.Contains(rawLower, "hong") {
 			return "香港/Hong Kong"
@@ -271,5 +273,86 @@ func translateCountry(raw string) string {
 	if strings.Contains(rawLower, "peru") { return "秘鲁/Peru" }
 	if strings.Contains(rawLower, "chile") { return "智利/Chile" }
 	return raw
+}
+
+func geoLookupDetail(ip string) string {
+	out := runCmd("curl", "-s", "--connect-timeout", "3", "http://ip-api.com/json/"+ip+"?lang=zh-CN")
+	if out == "" {
+		return ""
+	}
+	var result struct {
+		Region string `json:"regionName"`
+		City   string `json:"city"`
+		ISP    string `json:"isp"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		return ""
+	}
+	if result.Status != "success" {
+		return ""
+	}
+
+	// ISP 中文映射
+	isp := result.ISP
+	ispLower := strings.ToLower(isp)
+	switch {
+	case strings.Contains(ispLower, "chinanet"), strings.Contains(ispLower, "china telecom"):
+		isp = "中国电信"
+	case strings.Contains(ispLower, "china unicom"), strings.Contains(ispLower, "cnc group"):
+		isp = "中国联通"
+	case strings.Contains(ispLower, "china mobile"):
+		isp = "中国移动"
+	case strings.Contains(ispLower, "baidu"):
+		isp = "百度"
+	case strings.Contains(ispLower, "alibaba"), strings.Contains(ispLower, "taobao"), strings.Contains(ispLower, "hangzhou alibaba"):
+		isp = "阿里云"
+	case strings.Contains(ispLower, "tencent"), strings.Contains(ispLower, "weixin"):
+		isp = "腾讯云"
+	case strings.Contains(ispLower, "volcano engine"), strings.Contains(ispLower, "bytedance"), strings.Contains(ispLower, "volcano"):
+		isp = "火山引擎"
+	case strings.Contains(ispLower, "cloud computing"):
+		isp = "腾讯云"
+	case strings.Contains(ispLower, "bitnet"):
+		isp = "中国广电"
+	case strings.Contains(ispLower, "china internet network"):
+		isp = "CNNIC"
+	case strings.Contains(ispLower, "gds changan"):
+		isp = "中国广电"
+	case strings.Contains(ispLower, "cn2"):
+		isp = "中国电信"
+	case strings.Contains(ispLower, "qingdao"):
+		isp = "中国联通"
+	default:
+		// 保留原始ISP缩短显示
+		isp = strings.SplitN(isp, " ", 2)[0]
+	}
+
+	// 直辖市处理
+	var detail string
+	region := strings.TrimSuffix(strings.TrimSpace(result.Region), "市")
+	region = strings.TrimSuffix(region, "省")
+	city := strings.TrimSpace(result.City)
+	city = strings.TrimSuffix(city, "市")
+	regionIsDirectCity := strings.Contains(region, "北京") || strings.Contains(region, "上海") ||
+		strings.Contains(region, "天津") || strings.Contains(region, "重庆")
+	if regionIsDirectCity {
+		if city == "" || city == region {
+			detail = region + "市"
+		} else {
+			detail = region + "市" + city
+		}
+	} else {
+		if city == "" || city == region {
+			detail = region
+		} else {
+			detail = region + "省" + city + "市"
+		}
+	}
+
+	if detail == "省市 " || detail == "市 " || detail == "" {
+		return ""
+	}
+	return detail
 }
 

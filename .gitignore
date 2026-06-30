@@ -1,28 +1,29 @@
-# 配置文件
+# 真实配置（含IP/密码/API Key）
 gosrc/config.yml
 
-# 密钥文件
-*_密钥
-*_密钥.pub
+# 客户端源码（不开源）
+client-code/
+
+# 客户端程序
+Client/ServerReport.app
+Client/ServerReport.exe
+
+# SSH 密钥
 *.key
 
-# 报告与文档
+# 备份
+原版备份.zip
+
+# 文档说明
 部署教程.md
-部署说明.md
-口播文案.md
-安全查杀报告-*
-网站文件安全扫描报告-*
-服务器安全防护策略报告.md
-服务器加固报告.md
 服务器-VPN安装报告.md
-服务器安全扫描报告.md
-安全查杀报告-110.40.147.251.md
+服务器加固报告.md
+服务器安全防护策略报告.md
+客户端及新版说明.md
 
-# 视频文案素材
-视频文案/
-
-# macOS
-.DS_Store
-
-# Go 编译缓存
+# 构建产物
 go/server-report
+
+# 系统文件
+.DS_Store
+*.swp

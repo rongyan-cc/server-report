@@ -17,12 +17,29 @@ func main() {
 		case "--init":
 			cmdInit(configPath)
 			return
+		case "--save-report":
+			cfg, err := LoadConfig(findConfigPath())
+			if err != nil {
+				fmt.Printf("加载配置失败: %v\n", err)
+				os.Exit(1)
+			}
+			archive := len(os.Args) > 2 && os.Args[2] == "--archive"
+			saveReport(cfg, archive)
+			return
 		case "--run-once":
 			cmdRunOnce(configPath)
 			return
 		case "--subnet-scan":
 			checkSubnetBan()
 			fmt.Println("子网封禁扫描完成")
+			return
+		case "--serve":
+			cfg, err := LoadConfig(findConfigPath())
+			if err != nil {
+				fmt.Printf("加载配置失败: %v\n", err)
+				os.Exit(1)
+			}
+			startAPIServer(cfg)
 			return
 		case "--help", "-h":
 			printHelp()
@@ -71,9 +88,11 @@ func printHelp() {
 	fmt.Println(`server-report - 服务器日报工具
 
 用法:
-  server-report                   使用 /etc/server-report.yml 发送日报
-  server-report --init           初始化（安装 cron、建立基线）
+  server-report                   发送日报
   server-report --run-once       立即发送一次日报
+  server-report --save-report    每小时采集一次数据并保存（供API快速响应）
+  server-report --save-report --archive  凌晨归档前一天数据
+  server-report --serve          启动 API 服务（供客户端调用）
   server-report --subnet-scan    手动扫描并封禁恶意子网
   server-report --help           显示帮助
   server-report --version        显示版本`)

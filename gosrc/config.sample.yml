@@ -1,41 +1,52 @@
+# ServerReport - 配置文件
+# 放置路径: /data/server-report/config.yml
+#
+# 使用前请修改以下字段：
+#   - server.name
+#   - server.api_key
+#   - server.ssh_port（如非22）
+#   - smtp / mail（如需邮件功能）
+
 server:
-  name: "myserver"
-  ip: ""
-  ssh_port: 22
+  name: "my-server"                     # 服务器名称,随便填,你自己认识就行
+  ip: ""                                # 公网IP，留空自动获取
+  ssh_port: 22                          # SSH 端口（建议改为其它随机5位数字,如35478、45712等等）
+  api_key: "your-api-key-here"          # API 密钥（建议32位大小写字母加数字）
+  api_port: 8080                        # API 服务端口
 
 smtp:
   server: "smtp.example.com"
   port: 465
   ssl: true
-  user: "user@example.com"
-  password: "your-password"
+  user: "admin@example.com"
+  password: "your-email-password"
 
 mail:
   to: "admin@example.com"
-  from: "user@example.com"
+  from: "admin@example.com"
   subject: "服务器日报 - {name} / {ip} - {date}"
 
 schedule:
-  report_at: "00:01"
+  report_at: "00:01"                    # 每天发送邮件时间
 
 modules:
-  system: true
-  ssh_auth: true
-  fail2ban: true
-  network: true
-  firewall: false
-  services: true
-  changes: true
-  security: true
+  system: true                          # 系统健康
+  ssh_auth: true                        # SSH 登录审计
+  fail2ban: true                        # fail2ban 封禁统计
+  network: true                         # 网络连接
+  firewall: true                        # UFW/防火墙拦截
+  services: true                        # 服务列表
+  changes: true                         # 系统变更
+  security: true                        # 安全检测
 
 security:
   fail2ban:
     enabled: true
-    maxretry: 1
-    bantime: -1
-    findtime: 600
+    maxretry: 1                         # 1 次密码尝试即封
+    bantime: -1                         # -1 永久封禁
+    findtime: 600                       # 检测窗口（秒）
     journalmatch: "_SYSTEMD_UNIT=ssh.service + _COMM=sshd"
   subnet_ban:
-    enabled: true
-    threshold: 2
-    check_interval: 30
+    enabled: true                       # 同C段多个IP攻击时封整个段
+    threshold: 2                        # ≥2个IP触发封段
+    check_interval: 30                  # 每30分钟扫描一次（分钟）
