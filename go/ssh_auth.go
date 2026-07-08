@@ -113,8 +113,12 @@ func extractMethod(line string) string {
 
 func extractTimestamp(line string) string {
 	fields := strings.Fields(line)
-	if len(fields) >= 2 {
-		return fields[0] + " " + fields[1]
+	if len(fields) >= 1 {
+		ts := strings.Replace(fields[0], "T", " ", 1)
+		if len(ts) > 16 {
+			ts = ts[:16]
+		}
+		return ts
 	}
 	return ""
 }

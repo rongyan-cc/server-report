@@ -23,8 +23,20 @@ func main() {
 				fmt.Printf("加载配置失败: %v\n", err)
 				os.Exit(1)
 			}
-			archive := len(os.Args) > 2 && os.Args[2] == "--archive"
-			saveReport(cfg, archive)
+			archive := false
+			archiveDate := ""
+			for i := 2; i < len(os.Args); i++ {
+				switch os.Args[i] {
+				case "--archive":
+					archive = true
+				case "--date":
+					if i+1 < len(os.Args) {
+						archiveDate = os.Args[i+1]
+						i++
+					}
+				}
+			}
+			saveReport(cfg, archive, archiveDate)
 			return
 		case "--run-once":
 			cmdRunOnce(configPath)
@@ -129,24 +141,15 @@ func cmdRunOnce(configPath string) {
 		return
 	}
 
-	modules := map[string]func() string{
-		"system":   collectSystem,
-		"ssh_auth": collectSSHAuth,
-		"fail2ban": collectFail2ban,
-		"network":  collectNetwork,
-		"firewall": collectFirewall,
-		"services": collectServices,
-		"changes":  collectChanges,
-		"security": collectSecurity,
-	}
+	report := buildJSONReport(cfg)
+	mailBody := buildMailText(report, cfg)
 
-	report := buildReport(cfg, modules)
-	yesterday, _ := cfg.ReportDate()
+	yesterday, today := cfg.ReportDate()
 	subject := cfg.BuildSubject(yesterday)
 
-	if err := sendMail(cfg, subject, report); err != nil {
+	if err := sendMail(cfg, subject, mailBody); err != nil {
 		fmt.Printf("发送邮件失败: %v\n", err)
 		return
 	}
-	fmt.Printf("日报已发送: %s → %s\n", yesterday, runCmd("date", "+%Y-%m-%d"))
+	fmt.Printf("日报已发送: %s\n", today)
 }

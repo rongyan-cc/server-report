@@ -10,20 +10,33 @@ import (
 	"os"
 	"strings"
 	"strconv"
+	"time"
 )
 
 func buildJSONReport(cfg *Config) APIReport {
-	yesterday, today := cfg.ReportDate()
+	return buildJSONReportDate(cfg, "")
+}
+
+func buildJSONReportDate(cfg *Config, archiveDate string) APIReport {
+	var reportFrom, reportTo string
+	if archiveDate != "" {
+		reportFrom = archiveDate
+		reportTo = archiveDate
+	} else {
+		today := time.Now().Format("2006-01-02")
+		reportFrom = today
+		reportTo = today
+	}
 
 	return APIReport{
 		Status:    "ok",
-		Server:    cfg.Server.Name,
+		Server:    "",
 		Timestamp: runCmd("date", "+%Y-%m-%d %H:%M:%S"),
-		Date:      yesterday + " → " + today,
+		Date:      reportFrom + " → " + reportTo,
 		Sections: []APISection{
 			buildSystemSection(),
-			buildSSHAuthSection(),
-			buildFail2banSection(),
+			buildSSHAuthSection(archiveDate),
+			buildFail2banSection(archiveDate),
 			buildNetworkSection(),
 			buildFirewallSection(),
 			buildServicesSection(),
@@ -106,12 +119,19 @@ func buildSystemSection() APISection {
 }
 
 // ── SSH ──
-func buildSSHAuthSection() APISection {
+func buildSSHAuthSection(archiveDate string) APISection {
 	sd := SSHAuthData{}
 
-	since := runCmd("date", "-d", "yesterday 00:00:00", "+%Y-%m-%d %H:%M:%S")
-	until := runCmd("date", "-d", "today 00:00:00", "+%Y-%m-%d %H:%M:%S")
-	log := runCmd("journalctl", "-u", "ssh.service", "--since", since, "--until", until, "-o", "short-iso", "--no-pager")
+	var since, until, log string
+	if archiveDate != "" {
+		since = archiveDate + " 00:00:00"
+		until = runCmd("date", "-d", archiveDate+" +1 day", "+%Y-%m-%d %H:%M:%S")
+		log = runCmd("journalctl", "-u", "ssh.service", "--since", since, "--until", until, "-o", "short-iso", "--no-pager")
+	} else {
+		since = runCmd("date", "-d", "today 00:00:00", "+%Y-%m-%d %H:%M:%S")
+		until = runCmd("date", "+%Y-%m-%d %H:%M:%S")
+		log = runCmd("journalctl", "-u", "ssh.service", "--since", since, "--until", until, "-o", "short-iso", "--no-pager")
+	}
 
 	failLines := filterLines(log, "Failed password", "Invalid user")
 	okLines := filterLines(log, "Accepted")
@@ -173,39 +193,32 @@ func buildSSHAuthSection() APISection {
 }
 
 // ── fail2ban ──
-func buildFail2banSection() APISection {
+func buildFail2banSection(archiveDate string) APISection {
 	fd := Fail2banData{}
 	status := runCmd("fail2ban-client", "status", "sshd")
+
+	banDate := archiveDate
+	if banDate == "" {
+		banDate = time.Now().Format("2006-01-02")
+	}
+
+	bannedMap := getBannedIPsMap(banDate)
+	fd.CurrentBanned = len(bannedMap)
 
 	for _, line := range splitLines(status) {
 		if strings.Contains(line, "Total banned") {
 			fields := strings.Fields(line)
 			if len(fields) > 0 { fd.TotalBanned = atoi(fields[len(fields)-1]) }
 		}
-		if strings.Contains(line, "Currently banned") {
-			fields := strings.Fields(line)
-			if len(fields) > 0 { fd.CurrentBanned = atoi(fields[len(fields)-1]) }
-		}
-	}
-
-	// 获取被封 IP 列表
-	bannedIPs := ""
-	for _, line := range splitLines(status) {
-		if strings.Contains(line, "Banned IP list") {
-			if idx := strings.Index(line, ":"); idx != -1 {
-				bannedIPs = strings.TrimSpace(line[idx+1:])
-			}
-		}
 	}
 
 	journalAll := runCmd("journalctl", "-u", "ssh.service", "--since", "-7 days", "-o", "short-iso", "--no-pager")
 	subnetCount := make(map[string]int)
 
-	for _, ip := range strings.Fields(bannedIPs) {
+	for ip := range bannedMap {
 		if strings.Contains(ip, ":") { continue }
 
 		bi := BannedIP{IP: ip}
-		// 归属地
 		loc := geoLookup(ip)
 		if parts := strings.SplitN(loc, "/", 2); len(parts) == 2 {
 			bi.LocationCN, bi.LocationEN = parts[0], parts[1]
@@ -213,12 +226,11 @@ func buildFail2banSection() APISection {
 			bi.LocationEN = loc
 		}
 
-		// 中国 IP 查询详细位置
 		if bi.LocationCN == "中国" {
 			bi.LocationDetail = geoLookupDetail(ip)
 		}
 
-		bi.BanTime = getBanTime(ip)
+		bi.BanTime = bannedMap[ip]
 
 		sshLines := filterLines(journalAll, ip)
 		failLines := filterLinesFromSlice(sshLines, "Failed password", "Invalid user")
@@ -229,7 +241,6 @@ func buildFail2banSection() APISection {
 			}
 		}
 
-		// 子网
 		parts := strings.Split(ip, ".")
 		if len(parts) >= 3 {
 			subnet := parts[0] + "." + parts[1] + "." + parts[2] + ".0/24"
@@ -237,7 +248,6 @@ func buildFail2banSection() APISection {
 			subnetCount[subnet]++
 		}
 
-		// 去重用户名
 		seen := make(map[string]bool)
 		var uniq []string
 		for _, u := range bi.Users {
@@ -254,7 +264,51 @@ func buildFail2banSection() APISection {
 		}
 	}
 
+	if fd.BannedIPs == nil {
+		fd.BannedIPs = []BannedIP{}
+	}
+	if fd.BannedSubnets == nil {
+		fd.BannedSubnets = []SubnetInfo{}
+	}
+
 	return APISection{ID: "fail2ban", Title: "fail2ban 封禁统计", Type: "fail2ban", Data: fd}
+}
+
+type bannedIPInfo struct {
+	IP      string
+	BanTime string
+}
+
+func getBannedIPsOnDate(date string) []string {
+	ips := []string{}
+	for ip := range getBannedIPsMap(date) {
+		ips = append(ips, ip)
+	}
+	return ips
+}
+
+func getBannedIPsMap(date string) map[string]string {
+	log := runCmd("grep", "Ban ", "/var/log/fail2ban.log")
+	result := make(map[string]string)
+	for _, line := range splitLines(log) {
+		if !strings.HasPrefix(line, date) { continue }
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if f == "Ban" && i+1 < len(fields) {
+				ip := fields[i+1]
+				if _, ok := result[ip]; !ok {
+					ts := ""
+					if len(fields) >= 2 {
+						ts = fields[0] + " " + fields[1]
+						if len(ts) > 16 { ts = ts[:16] }
+					}
+					result[ip] = ts
+				}
+				break
+			}
+		}
+	}
+	return result
 }
 
 // ── 网络 ──
@@ -511,11 +565,22 @@ func writeInt64(path string, val int64) {
 
 // ── 保存报告 ──
 
-func saveReport(cfg *Config, archive bool) {
+func saveReport(cfg *Config, archive bool, archiveDate string) {
 	dir := reportDir(cfg)
 	os.MkdirAll(dir, 0755)
 
-	result := buildJSONReport(cfg)
+	var result APIReport
+	var saveDate string
+	if archive {
+		if archiveDate == "" {
+			saveDate, _ = cfg.ReportDate()
+		} else {
+			saveDate = archiveDate
+		}
+		result = buildJSONReportDate(cfg, saveDate)
+	} else {
+		result = buildJSONReport(cfg)
+	}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		fmt.Printf("序列化报告失败: %v\n", err)
@@ -523,19 +588,15 @@ func saveReport(cfg *Config, archive bool) {
 	}
 
 	if archive {
-		// 归档：保存为 YYYY-MM-DD.json
-		yesterday, _ := cfg.ReportDate()
-		path := dateReportPath(cfg, yesterday)
+		path := dateReportPath(cfg, saveDate)
 		if err := os.WriteFile(path, data, 0644); err != nil {
 			fmt.Printf("保存归档报告失败: %v\n", err)
 			return
 		}
 		fmt.Printf("归档报告已保存: %s (%d bytes)\n", path, len(data))
 
-		// 归档后清理 today.json（它已被覆盖）
 		os.Remove(todayReportPath(cfg))
 	} else {
-		// 每小时快照：保存为 today.json
 		path := todayReportPath(cfg)
 		if err := os.WriteFile(path, data, 0644); err != nil {
 			fmt.Printf("保存今日报告失败: %v\n", err)

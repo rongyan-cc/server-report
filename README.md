@@ -6,6 +6,37 @@
 
 ---
 
+## 2026-07-08 更新说明
+
+### 服务端
+- **新增 `/api/v1/dates` 接口** — 返回服务器所有存档日期列表，客户端据此按需同步缺失数据
+- **SSH 审计支持日期过滤** — `buildSSHAuthSection(archiveDate)` 归档时按指定日期查询 journalctl，不再显示实时数据
+- **fail2ban "本日封禁"** — 实时报告和归档统一按日期过滤 IP 列表，只显示当日新增封禁数，不显示 fail2ban-client 历史累计值；`total_banned` 保持累计总量
+- **封禁时间零"未知"** — `getBannedIPsMap(date)` 一次 grep 同时提取 IP 和时间，消除单独 `getBanTime` 的漏查问题
+- **实时报告日期策略** — 从"昨日→今日"改为"今日→今日"，SSH 审计查询 `today 00:00 → now`
+- **API 响应精简** — `server` 字段返回空字符串（服务器名称已由客户端侧边栏显示）
+
+### macOS windows 客户端
+- **数据同步** — 新增 `syncArchiveDates(server:)` 方法：获取服务器 `/api/v1/dates` 列表，对比本地日期，缺失的自动下载；开屏、刷新、切换服务器均触发同步
+- **标题居中** — `Text.overlay(alignment:.trailing)` 实现日历按钮右侧覆盖，标题绝对居中
+- **日期格式** — `2026-07-08 → 2026-07-08` → 正则去后半段只显示 `2026-07-08`
+- **时间戳标签** — 加 `查询时间：` 前缀
+- **界面精简** — 标题去掉服务器名称行和图标；系统健康删除"主机名""公网IP"行
+- **运行时间本地化** — `2 weeks, 1 hour, 19 minutes` → `15天1小时19分钟`（超过30天显示 `X月X天X小时X分钟`）
+- **网络超时** — `URLSession` 配置 30s 请求超时、60s 资源超时，不无限卡 loading
+- **防重入** — `fetchReport` 开头 `guard !isLoading`，避免 `onAppear` 与 `onChange` 并发触发
+- **列宽优化** — fail2ban 和 SSH 审计的"封禁时间"列权重 2→3，`noTruncate` 设为 true
+
+### 邮件发送优化
+- **`cmdRunOnce` 改用新版数据采集** — 邮件发送不再使用旧版文本采集函数（`collectFail2ban` 等调用 `journalctl -7 days` 导致卡死），改为调 `buildJSONReport()` 获取结构化数据，再格式化为邮件正文
+- **新增 `buildMailText`** — 从 JSON 报告生成邮件文本，按模块独立格式化函数，类型安全
+
+### 依赖变更
+- 客户端新增依赖：服务端 `/api/v1/dates` 接口（2026-07-08 后更新的服务端版本）
+- 中国 IP 市县细化依赖：`ip-api.com`（`geoLookupDetail` 接口），需服务器能访问外网
+
+---
+
 ## 2026-06-30 更新说明
 
 - 服务端增加 api key 功能，供客户端调用
@@ -245,7 +276,17 @@ find /data/server-report/reports -name "*.json" -mtime +180 -delete
 
 ## 客户端
 
-### macOS 客户端
+### macOS 客户端（原生 SwiftUI）
+
+**源码：** `client-code/macos/`（Swift Package Manager）
+
+**编译：**
+```bash
+cd client-code/macos
+swift build -c release
+# 编译产物：.build/release/ServerReport
+# 放入 ServerReport.app/Contents/MacOS/ 即可
+```
 
 **运行：** 拷贝 `ServerReport.app` 到应用程序目录直接打开即可使用。
 
@@ -253,7 +294,21 @@ find /data/server-report/reports -name "*.json" -mtime +180 -delete
 - `servers.json` — 服务器配置列表
 - `reports/*.json` — 历史日报缓存
 
-### Windows 客户端
+### Windows 客户端（Wails + Go + JS）
+
+**源码：** `client-code/windows/`（Wails v2 项目）
+
+**依赖：**
+- Go 1.21+
+- Wails CLI v2
+- 前端：纯 JS（`frontend/dist/app.js` + `frontend/dist/style.css`），无构建步骤
+
+**编译（macOS 上交叉编译）：**
+```bash
+cd client-code/windows
+wails build -platform windows/amd64
+# 编译产物：build/bin/ServerReport.exe
+```
 
 **运行：** 直接双击 `ServerReport.exe`
 

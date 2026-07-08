@@ -65,6 +65,42 @@ func startAPIServer(cfg *Config) {
 		})
 	})
 
+	mux.HandleFunc("/api/v1/dates", func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Query().Get("key")
+		if key == "" || key != cfg.Server.APIKey {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(apiResponse{Status: "error", Message: "invalid or missing api key"})
+			return
+		}
+
+		dir := reportDir(cfg)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(apiResponse{Status: "error", Message: "cannot read reports directory"})
+			return
+		}
+
+		var dates []string
+		for _, e := range entries {
+			name := e.Name()
+			if !strings.HasSuffix(name, ".json") || name == "today.json" {
+				continue
+			}
+			dateStr := strings.TrimSuffix(name, ".json")
+			if len(dateStr) == 10 && dateStr[4] == '-' && dateStr[7] == '-' {
+				dates = append(dates, dateStr)
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			Status string   `json:"status"`
+			Dates  []string `json:"dates"`
+		}{Status: "ok", Dates: dates})
+	})
+
 	mux.HandleFunc("/api/v1/report", func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
 		if key == "" || key != cfg.Server.APIKey {
@@ -86,6 +122,16 @@ func startAPIServer(cfg *Config) {
 		if data, err := loadReportFile(reportPath); err == nil {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(data)
+			return
+		}
+
+		// 指定了日期但没有缓存文件 → 返回错误（不实时生成）
+		if date != "" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(apiResponse{
+				Status:  "error",
+				Message: "no data for this date",
+			})
 			return
 		}
 
