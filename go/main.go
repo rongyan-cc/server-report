@@ -141,15 +141,15 @@ func cmdRunOnce(configPath string) {
 		return
 	}
 
-	report := buildJSONReport(cfg)
+	yesterday, _ := cfg.ReportDate()
+	report := buildJSONReportDate(cfg, yesterday)
 	mailBody := buildMailText(report, cfg)
 
-	yesterday, today := cfg.ReportDate()
 	subject := cfg.BuildSubject(yesterday)
 
 	if err := sendMail(cfg, subject, mailBody); err != nil {
 		fmt.Printf("发送邮件失败: %v\n", err)
 		return
 	}
-	fmt.Printf("日报已发送: %s\n", today)
+	fmt.Printf("日报已发送: %s\n", yesterday)
 }
