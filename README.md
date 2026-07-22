@@ -6,6 +6,21 @@
 
 ---
 
+## v1.0.3 (2026-07-22) 更新说明
+
+### macOS 客户端
+- **多服务器数据隔离** — 按 serverID 分目录缓存，切换服务器后不显示旧服务器数据
+- **关于页面** — 新增关于窗口，显示版本号、开发者信息、GitHub 链接
+- **打开配置目录** — 界面增加按钮，一键打开 `~/.config/server-report/` 目录
+- **服务器 IP 默认隐藏** — 列表 IP 以 `***` 显示，👁 按钮可切换显示/隐藏
+
+### Windows 客户端
+- **多服务器数据隔离** — 按 serverID 分目录缓存，切换服务器后不显示旧服务器数据
+- **关于页面** — 新增关于窗口，显示版本号、开发者信息、GitHub 链接
+- **服务器 IP 默认隐藏** — 列表 IP 以 `***` 显示，👁 按钮可切换显示/隐藏
+
+---
+
 ## 2026-07-08 更新说明
  
 ### 服务端
@@ -70,7 +85,7 @@ server-report/
 │   └── util.go                  # 工具函数
 ├── gosrc/                       # 编译好的服务端二进制程序
 │   ├── server-report
-│   └── config.yml               # 示例配置
+│   └── config.sample.yml        # 示例配置文件
 ├── Client/                      # 客户端
 │   ├── ServerReport.app         # macOS，暂未开源
 │   └── ServerReport.exe         # Windows  暂未开源
@@ -112,9 +127,11 @@ ssh root@你的服务器IP "chmod +x /data/server-report/server-report"
 
 **3. 修改配置文件**
 
-程序自带示例配置文件 `config.yml`，上传后按需修改：
+上传 `config.sample.yml` 为 `config.yml` 后按需修改：
 
 ```bash
+# 重命名示例配置为实际配置
+ssh root@你的服务器IP "mv /data/server-report/config.sample.yml /data/server-report/config.yml"
 # 编辑配置文件
 ssh root@你的服务器IP "vi /data/server-report/config.yml"
 ```
